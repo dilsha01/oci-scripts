@@ -34,7 +34,7 @@ terraform.rc
 # Terraform lock file
 # Note: HashiCorp recommends committing .terraform.lock.hcl for reproducible deployments.
 # Uncomment the line below if you prefer to ignore lock files:
-# .terraform.lock.hcl
+.terraform.lock.hcl
 
 # ==============================================================================
 # Sensitive Keys & Certificates (OCI / SSH / TLS)
