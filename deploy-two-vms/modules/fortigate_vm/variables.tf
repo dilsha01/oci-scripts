@@ -37,3 +37,7 @@ variable "boot_volume_vpus_per_gb" {
   type    = number
   default = 10
 }
+variable "hostname_label" {
+  description = "Hostname label for the primary VNIC"
+  type        = string
+}

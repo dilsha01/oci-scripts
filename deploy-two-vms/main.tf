@@ -269,7 +269,9 @@ moved {
 module "fw_vm_01" {
   source = "./modules/fortigate_vm"
 
-  name                    = "FW-VM01"
+  name           = "Test-VM01"
+  vnic_name      = "TestFW-VM01-vnic01"
+  hostname_label = "testfw-vm01"
   private_ip              = "10.8.0.4"
   compartment_id          = var.compartment_ocid
   availability_domain     = local.ad_name
@@ -288,7 +290,9 @@ module "fw_vm_01" {
 module "fw_vm_02" {
   source = "./modules/fortigate_vm"
 
-  name                    = "FW-VM02"
+  name           = "Test-VM02"
+  vnic_name      = "TestFW-VM02-vnic01"
+  hostname_label = "testfw-vm02"
   private_ip              = "10.8.0.5"
   # fault_domain          = "FAULT-DOMAIN-2"   # optional: pick a different one from VM01
   compartment_id          = var.compartment_ocid

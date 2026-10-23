@@ -38,10 +38,12 @@ resource "oci_core_instance" "vm" {
 
   create_vnic_details {
     display_name              = var.vnic_name
+    hostname_label            = var.hostname_label
     subnet_id                 = var.subnet_id
     assign_public_ip          = true
     private_ip                = var.private_ip
     assign_private_dns_record = true
+    skip_source_dest_check = true
   }
 
   instance_options {
