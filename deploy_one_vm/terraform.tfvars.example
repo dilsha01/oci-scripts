@@ -1,0 +1,5 @@
+region           = "ap-singapore-1"
+tenancy_ocid     = "ocid1.tenancy.oc1..xxxx"
+compartment_ocid = "ocid1.compartment.oc1..xxxx"
+ssh_public_key   = "ssh-rsa AAAA... you@host"
+my_ip_cidr       = "203.0.113.10/32"
