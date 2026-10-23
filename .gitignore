@@ -1,0 +1,71 @@
+# ==============================================================================
+# Terraform
+# ==============================================================================
+# Local .terraform directories containing downloaded providers and modules
+**/.terraform/*
+
+# State files contain sensitive infrastructure data and secrets
+*.tfstate
+*.tfstate.*
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Exclude sensitive Terraform variable files (*.tfvars)
+*.tfvars
+*.tfvars.json
+
+# Allow example/template variable files
+!*.tfvars.example
+!*.tfvars.sample
+!*.tfvars.template
+
+# Override files (used for local custom overrides)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI configuration files
+.terraformrc
+terraform.rc
+
+# Terraform lock file
+# Note: HashiCorp recommends committing .terraform.lock.hcl for reproducible deployments.
+# Uncomment the line below if you prefer to ignore lock files:
+# .terraform.lock.hcl
+
+# ==============================================================================
+# Sensitive Keys & Certificates (OCI / SSH / TLS)
+# ==============================================================================
+*.pem
+*.key
+*.key.pub
+*.pub
+*.p12
+*.cer
+*.crt
+id_rsa*
+
+# ==============================================================================
+# Operating System & Editor Files
+# ==============================================================================
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# IDEs & Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
