@@ -13,8 +13,8 @@ marketplace_listing_name    = "FortiGate Next-Gen Firewall (BYOL)"
 marketplace_package_version = "8.0.1_(_X64_)"
 accept_marketplace_terms    = true
 
-vcn_name    = "Test-VCN"
-subnet_name = "public subnet-Test-VCN"
+vcn_name    = "MY-TEST-VCN"
+subnet_name = "MY-TEST-SUBNET-01"
 
 boot_volume_size_gb     = 50
 boot_volume_vpus_per_gb = 10
