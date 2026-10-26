@@ -141,6 +141,60 @@ variable "webapp_subnet_cidr" {
   default     = null
 }
 
+variable "internet_gateway_ocid" {
+  description = "OCID of existing Internet Gateway for management / outbound routing"
+  type        = string
+  default     = ""
+}
+
+variable "drg_ocid" {
+  description = "OCID of existing Dynamic Routing Gateway (DRG) for spoke and on-prem routing"
+  type        = string
+  default     = ""
+}
+
+variable "nat_gateway_ocid" {
+  description = "OCID of existing NAT Gateway for untrust / outbound routing"
+  type        = string
+  default     = ""
+}
+
+variable "service_gateway_ocid" {
+  description = "OCID of existing Service Gateway for Oracle Services Network"
+  type        = string
+  default     = ""
+}
+
+variable "create_internet_gateway" {
+  description = "Whether to automatically create an Internet Gateway if internet_gateway_ocid is empty"
+  type        = bool
+  default     = true
+}
+
+variable "create_nat_gateway" {
+  description = "Whether to automatically create a NAT Gateway if nat_gateway_ocid is empty"
+  type        = bool
+  default     = true
+}
+
+variable "create_service_gateway" {
+  description = "Whether to automatically create a Service Gateway if service_gateway_ocid is empty"
+  type        = bool
+  default     = true
+}
+
+variable "create_drg" {
+  description = "Whether to automatically create a Dynamic Routing Gateway (DRG) if drg_ocid is empty"
+  type        = bool
+  default     = true
+}
+
+variable "spoke_cidrs" {
+  description = "List of Spoke CIDR blocks (e.g. ['10.50.2.0/25', '10.50.2.128/25']) routed via DRG and FortiGate"
+  type        = list(string)
+  default     = []
+}
+
 
 provider "oci" {
   region = var.region

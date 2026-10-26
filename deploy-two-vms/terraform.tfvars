@@ -28,3 +28,20 @@ fw01_untrust_ha_ip = "10.8.0.229"
 
 # Protected workload subnet CIDR, only if creating a new subnet
 #webapp_subnet_cidr = "REPLACE_WITH_APPROVED_WEBAPP_CIDR"
+
+# ---------------- Route Tables & Gateways ----------------
+# Provide existing gateway OCIDs if available; if left empty (""), Terraform automatically creates them.
+internet_gateway_ocid = "" # e.g. "ocid1.internetgateway.oc1..."
+nat_gateway_ocid      = "" # e.g. "ocid1.natgateway.oc1..."
+service_gateway_ocid  = "" # e.g. "ocid1.servicegateway.oc1..."
+drg_ocid              = "" # e.g. "ocid1.drg.oc1..."
+
+# Automatic gateway creation flags (default is true for all)
+create_internet_gateway = true
+create_nat_gateway      = true
+create_service_gateway  = true
+create_drg              = true
+
+# Spoke CIDRs routed via DRG and FortiGate (e.g. ["10.50.2.0/25", "10.50.2.128/25"])
+spoke_cidrs = []
+
