@@ -75,7 +75,7 @@ resource "oci_core_subnet" "untrust" {
 resource "oci_core_subnet" "heartbeat" {
   compartment_id             = local.net_compartment
   vcn_id                     = var.vcn_ocid
-  display_name               = "PR-HEARTBEA"
+  display_name               = "PR-HEARTBEAT"
   cidr_block                 = "10.8.0.240/28"
   dns_label                  = "heartbeat"
   prohibit_public_ip_on_vnic = true
