@@ -124,6 +124,24 @@ variable "ssh_key_name" {
   default     = "TestFW-VM01"
 }
 
+
+variable "fw01_indoor_ha_ip" {
+  description = "Movable secondary IP on FW01 indoor/trust VNIC"
+  type        = string
+}
+
+variable "fw01_untrust_ha_ip" {
+  description = "Movable secondary IP on FW01 untrust VNIC"
+  type        = string
+}
+
+variable "webapp_subnet_cidr" {
+  description = "Approved CIDR for the protected workload subnet"
+  type        = string
+  default     = null
+}
+
+
 provider "oci" {
   region = var.region
 }
@@ -289,48 +307,49 @@ module "fw_vm_01" {
   boot_volume_vpus_per_gb = var.boot_volume_vpus_per_gb
 
   # VNICs: [0] MGMT  [1] Indoor  [2] Untrust  [3] Heartbeat
-  vnics = [
-    {
-      # [0] MGMT – primary IP + reserved public IP (created by module)
-      name                   = "FW01-MGMT"
-      hostname_label         = "fw01-mgmt"
-      subnet_id              = oci_core_subnet.mgmt.id
-      private_ip             = "10.8.0.132"        # REPLACE_FW01_MGMT_IP
-      secondary_private_ip   = null
-      assign_public_ip       = true
-      skip_source_dest_check = false
-    },
-    {
-      # [1] Indoor – primary IP + secondary private IP
-      name                   = "FW01-INDOOR"
-      hostname_label         = "fw01-indoor"
-      subnet_id              = oci_core_subnet.indoor.id
-      private_ip             = "10.8.0.196"       # REPLACE_FW01_INDOOR_PRIMARY_IP
-      secondary_private_ip   = "10.8.0.197"       # REPLACE_FW01_INDOOR_SECONDARY_IP if different
-      assign_public_ip       = false
-      skip_source_dest_check = true
-    },
-    {
-      # [2] Untrust – primary IP + reserved public IP (created by module)
-      name                   = "FW01-UNTRUST"
-      hostname_label         = "fw01-untrust"
-      subnet_id              = oci_core_subnet.untrust.id
-      private_ip             = "10.8.0.228"       # REPLACE_FW01_UNTRUST_IP
-      secondary_private_ip   = null
-      assign_public_ip       = true
-      skip_source_dest_check = true
-    },
-    {
-      # [3] Heartbeat – primary IP only
-      name                   = "FW01-HEARTBEAT"
-      hostname_label         = "fw01-heartbeat"
-      subnet_id              = oci_core_subnet.heartbeat.id
-      private_ip             = "10.8.0.244"      # REPLACE_FW01_HEARTBEAT_IP
-      secondary_private_ip   = null
-      assign_public_ip       = false
-      skip_source_dest_check = true
-    }
-  ]
+  
+vnics = [
+  {
+    # port1: management, with a dedicated public IP
+    name                   = "FW01-MGMT"
+    hostname_label         = "fw01-mgmt"
+    subnet_id              = oci_core_subnet.mgmt.id
+    private_ip             = "10.8.0.132"
+    secondary_private_ip   = null
+    assign_public_ip       = true
+    skip_source_dest_check = false
+  },
+  {
+    # port2: indoor/trust, with a movable secondary IP
+    name                   = "FW01-INDOOR"
+    hostname_label         = "fw01-indoor"
+    subnet_id              = oci_core_subnet.indoor.id
+    private_ip             = "10.8.0.196"
+    secondary_private_ip   = var.fw01_indoor_ha_ip
+    assign_public_ip       = false
+    skip_source_dest_check = true
+  },
+  {
+    # port3: untrust, with a movable secondary IP
+    name                   = "FW01-UNTRUST"
+    hostname_label         = "fw01-untrust"
+    subnet_id              = oci_core_subnet.untrust.id
+    private_ip             = "10.8.0.228"
+    secondary_private_ip   = var.fw01_untrust_ha_ip
+    assign_public_ip       = false
+    skip_source_dest_check = true
+  },
+  {
+    # port4: dedicated heartbeat
+    name                   = "FW01-HEARTBEAT"
+    hostname_label         = "fw01-heartbeat"
+    subnet_id              = oci_core_subnet.heartbeat.id
+    private_ip             = "10.8.0.244"
+    secondary_private_ip   = null
+    assign_public_ip       = false
+    skip_source_dest_check = true
+  }
+]
 
   depends_on = [oci_core_app_catalog_subscription.sub]
 }
@@ -351,50 +370,67 @@ module "fw_vm_02" {
   boot_volume_vpus_per_gb = var.boot_volume_vpus_per_gb
 
   # VNICs: [0] MGMT  [1] Indoor  [2] Untrust  [3] Heartbeat
-  vnics = [
-    {
-      # [0] MGMT – primary IP + reserved public IP (created by module)
-      name                   = "FW02-MGMT"
-      hostname_label         = "fw02-mgmt"
-      subnet_id              = oci_core_subnet.mgmt.id
-      private_ip             = "10.8.0.130"        # REPLACE_FW02_MGMT_IP
-      secondary_private_ip   = null
-      assign_public_ip       = true
-      skip_source_dest_check = false
-    },
-    {
-      # [1] Indoor – primary IP only
-      name                   = "FW02-INDOOR"
-      hostname_label         = "fw02-indoor"
-      subnet_id              = oci_core_subnet.indoor.id
-      private_ip             = "10.8.0.194"       # REPLACE_FW02_INDOOR_IP
-      secondary_private_ip   = null
-      assign_public_ip       = false
-      skip_source_dest_check = true
-    },
-    {
-      # [2] Untrust – primary IP only
-      name                   = "FW02-UNTRUST"
-      hostname_label         = "fw02-untrust"
-      subnet_id              = oci_core_subnet.untrust.id
-      private_ip             = "10.8.0.226"       # REPLACE_FW02_UNTRUST_IP
-      secondary_private_ip   = null
-      assign_public_ip       = false
-      skip_source_dest_check = true
-    },
-    {
-      # [3] Heartbeat – primary IP only
-      name                   = "FW02-HEARTBEAT"
-      hostname_label         = "fw02-heartbeat"
-      subnet_id              = oci_core_subnet.heartbeat.id
-      private_ip             = "10.8.0.242"      # REPLACE_FW02_HEARTBEAT_IP
-      secondary_private_ip   = null
-      assign_public_ip       = false
-      skip_source_dest_check = true
-    }
-  ]
+  
+vnics = [
+  {
+    # port1: dedicated standby management IP
+    name                   = "FW02-MGMT"
+    hostname_label         = "fw02-mgmt"
+    subnet_id              = oci_core_subnet.mgmt.id
+    private_ip             = "10.8.0.130"
+    secondary_private_ip   = null
+    assign_public_ip       = true
+    skip_source_dest_check = false
+  },
+  {
+    # port2: indoor/trust
+    name                   = "FW02-INDOOR"
+    hostname_label         = "fw02-indoor"
+    subnet_id              = oci_core_subnet.indoor.id
+    private_ip             = "10.8.0.194"
+    secondary_private_ip   = null
+    assign_public_ip       = false
+    skip_source_dest_check = true
+  },
+  {
+    # port3: untrust
+    name                   = "FW02-UNTRUST"
+    hostname_label         = "fw02-untrust"
+    subnet_id              = oci_core_subnet.untrust.id
+    private_ip             = "10.8.0.226"
+    secondary_private_ip   = null
+    assign_public_ip       = false
+    skip_source_dest_check = true
+  },
+  {
+    # port4: dedicated heartbeat
+    name                   = "FW02-HEARTBEAT"
+    hostname_label         = "fw02-heartbeat"
+    subnet_id              = oci_core_subnet.heartbeat.id
+    private_ip             = "10.8.0.242"
+    secondary_private_ip   = null
+    assign_public_ip       = false
+    skip_source_dest_check = true
+  }
+]
+
 
   depends_on = [oci_core_app_catalog_subscription.sub]
+}
+
+
+resource "oci_core_public_ip" "shared_traffic" {
+  compartment_id = var.compartment_ocid
+  lifetime       = "RESERVED"
+  display_name   = "FGT-HA-SHARED-TRAFFIC-PIP"
+
+  # FW01 port3's secondary private IP is the initial association.
+  private_ip_id = module.fw_vm_01.secondary_private_ip_ids["2"]
+
+  # FortiGate's OCI Fabric connector moves this association during HA.
+  lifecycle {
+    ignore_changes = [private_ip_id]
+  }
 }
 
 
@@ -422,4 +458,25 @@ output "marketplace_available_versions" {
 }
 output "selected_image_id" {
   value = local.image_id
+}
+
+
+output "fw01_management_public_ip" {
+  value = module.fw_vm_01.public_ip
+}
+
+output "fw02_management_public_ip" {
+  value = module.fw_vm_02.public_ip
+}
+
+output "shared_traffic_public_ip" {
+  value = oci_core_public_ip.shared_traffic.ip_address
+}
+
+output "fw01_indoor_ha_ip" {
+  value = module.fw_vm_01.secondary_private_ip_addresses["1"]
+}
+
+output "fw01_untrust_ha_ip" {
+  value = module.fw_vm_01.secondary_private_ip_addresses["2"]
 }

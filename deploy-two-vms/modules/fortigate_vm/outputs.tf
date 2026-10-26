@@ -27,3 +27,20 @@ output "secondary_vnic_ids" {
   description = "Map of VNIC index => VNIC attachment OCID for secondary VNICs"
   value       = { for k, att in oci_core_vnic_attachment.secondary : k => att.id }
 }
+
+
+output "secondary_private_ip_ids" {
+  description = "Secondary private IP OCIDs keyed by VNIC index"
+  value = {
+    for k, ip in oci_core_private_ip.secondary :
+    k => ip.id
+  }
+}
+
+output "secondary_private_ip_addresses" {
+  description = "Secondary private IP addresses keyed by VNIC index"
+  value = {
+    for k, ip in oci_core_private_ip.secondary :
+    k => ip.ip_address
+  }
+}

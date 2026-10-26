@@ -104,23 +104,26 @@ data "oci_core_vnic_attachments" "for_secondary_ip" {
   depends_on = [oci_core_vnic_attachment.secondary]
 }
 
+
 resource "oci_core_private_ip" "secondary" {
   for_each = local.secondary_ip_vnics
 
-  vnic_id = each.key == "0" ? (
-    # Primary VNIC: resolve via vnic_attachments filtered by display_name
-    [for a in data.oci_core_vnic_attachments.for_secondary_ip[each.key].vnic_attachments :
-      a.vnic_id if a.display_name == each.value.name
-    ][0]
-  ) : (
-    [for a in data.oci_core_vnic_attachments.for_secondary_ip[each.key].vnic_attachments :
-      a.vnic_id if a.display_name == each.value.name
-    ][0]
-  )
+  vnic_id = [
+    for a in data.oci_core_vnic_attachments.for_secondary_ip[each.key].vnic_attachments :
+    a.vnic_id
+    if a.display_name == each.value.name
+  ][0]
 
   ip_address   = each.value.secondary_private_ip
-  display_name = "${each.value.name}-secondary-ip"
+  display_name = "${var.name}-${each.value.name}-ha-ip"
+
+  # The OCI Fabric connector can move this secondary IP
+  # from the active VNIC to the standby VNIC during HA.
+  lifecycle {
+    ignore_changes = [vnic_id]
+  }
 }
+
 
 # ── Reserved public IPs ───────────────────────────────────────────────────────
 # For each VNIC with assign_public_ip = true:

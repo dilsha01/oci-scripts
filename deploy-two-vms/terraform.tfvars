@@ -20,3 +20,11 @@ subnet_name = "MY-TEST-SUBNET-01"
 
 boot_volume_size_gb     = 50
 boot_volume_vpus_per_gb = 10
+
+
+# Movable secondary private IPs, initially attached to FW01
+fw01_indoor_ha_ip  = "10.8.0.197"
+fw01_untrust_ha_ip = "10.8.0.229"
+
+# Protected workload subnet CIDR, only if creating a new subnet
+#webapp_subnet_cidr = "REPLACE_WITH_APPROVED_WEBAPP_CIDR"
