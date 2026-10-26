@@ -2,6 +2,8 @@ region           = "ap-hyderabad-1"
 tenancy_ocid     = "ocid1.tenancy.oc1..aaaaaaaavnwzahmwtpputxfnfrds57n7doyqig4532egavitx64o5kpbpbva"
 compartment_ocid = "ocid1.compartment.oc1..aaaaaaaapn6w4llsutvzm42o527nap5dghqnbnoikwxgzwosslmvr5fvp7ha"
 
+vcn_ocid    = "ocid1.vcn.oc1.ap-hyderabad-1.amaaaaaazv23a4aaxicwhtrk5ymgr7grbtni7jh5jjhk3bjelebl3u6r7nqa"
+
 ad_index = 0
 
 shape         = "VM.Standard.E4.Flex"

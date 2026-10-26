@@ -106,6 +106,13 @@ variable "subnet_name" {
   default = "public subnet-Test-VCN"
 }
 
+# VCN OCID – used for subnet creation in network.tf
+variable "vcn_ocid" {
+  description = "OCID of the existing VCN where subnets will be created"
+  type        = string
+  default     = "ocid1.vcn.oc1.ap-hyderabad-1.REPLACE_WITH_YOUR_VCN_OCID"
+}
+
 # SSH key: empty = generate one key pair shared by both VMs
 variable "ssh_public_key" {
   type    = string
@@ -269,20 +276,61 @@ moved {
 module "fw_vm_01" {
   source = "./modules/fortigate_vm"
 
-  name           = "Test-VM01"
-  vnic_name      = "TestFW-VM01-vnic01"
-  hostname_label = "testfw-vm01"
-  private_ip              = "10.8.0.4"
-  compartment_id          = var.compartment_ocid
-  availability_domain     = local.ad_name
-  subnet_id               = local.subnet_id
-  image_id                = local.image_id
-  ssh_public_key          = local.ssh_public_key
+  name                = "FW01-VM"
+  compartment_id      = var.compartment_ocid
+  availability_domain = local.ad_name
+  image_id            = local.image_id
+  ssh_public_key      = local.ssh_public_key
+
   shape                   = var.shape
   ocpus                   = var.ocpus
   memory_in_gbs           = var.memory_in_gbs
   boot_volume_size_gb     = var.boot_volume_size_gb
   boot_volume_vpus_per_gb = var.boot_volume_vpus_per_gb
+
+  # VNICs: [0] MGMT  [1] Indoor  [2] Untrust  [3] Heartbeat
+  vnics = [
+    {
+      # [0] MGMT – primary IP + reserved public IP (created by module)
+      name                   = "FW01-MGMT"
+      hostname_label         = "fw01-mgmt"
+      subnet_id              = oci_core_subnet.mgmt.id
+      private_ip             = "10.8.0.132"        # REPLACE_FW01_MGMT_IP
+      secondary_private_ip   = null
+      assign_public_ip       = true
+      skip_source_dest_check = false
+    },
+    {
+      # [1] Indoor – primary IP + secondary private IP
+      name                   = "FW01-INDOOR"
+      hostname_label         = "fw01-indoor"
+      subnet_id              = oci_core_subnet.indoor.id
+      private_ip             = "10.8.0.196"       # REPLACE_FW01_INDOOR_PRIMARY_IP
+      secondary_private_ip   = "10.8.0.197"       # REPLACE_FW01_INDOOR_SECONDARY_IP if different
+      assign_public_ip       = false
+      skip_source_dest_check = true
+    },
+    {
+      # [2] Untrust – primary IP + reserved public IP (created by module)
+      name                   = "FW01-UNTRUST"
+      hostname_label         = "fw01-untrust"
+      subnet_id              = oci_core_subnet.untrust.id
+      private_ip             = "10.8.0.228"       # REPLACE_FW01_UNTRUST_IP
+      secondary_private_ip   = null
+      assign_public_ip       = true
+      skip_source_dest_check = true
+    },
+    {
+      # [3] Heartbeat – primary IP only
+      name                   = "FW01-HEARTBEAT"
+      hostname_label         = "fw01-heartbeat"
+      subnet_id              = oci_core_subnet.heartbeat.id
+      private_ip             = "10.8.0.244"      # REPLACE_FW01_HEARTBEAT_IP
+      secondary_private_ip   = null
+      assign_public_ip       = false
+      skip_source_dest_check = true
+    }
+  ]
 
   depends_on = [oci_core_app_catalog_subscription.sub]
 }
@@ -290,24 +338,65 @@ module "fw_vm_01" {
 module "fw_vm_02" {
   source = "./modules/fortigate_vm"
 
-  name           = "Test-VM02"
-  vnic_name      = "TestFW-VM02-vnic01"
-  hostname_label = "testfw-vm02"
-  private_ip              = "10.8.0.5"
-  # fault_domain          = "FAULT-DOMAIN-2"   # optional: pick a different one from VM01
-  compartment_id          = var.compartment_ocid
-  availability_domain     = local.ad_name
-  subnet_id               = local.subnet_id
-  image_id                = local.image_id
-  ssh_public_key          = local.ssh_public_key
+  name                = "FW02-VM"
+  compartment_id      = var.compartment_ocid
+  availability_domain = local.ad_name
+  image_id            = local.image_id
+  ssh_public_key      = local.ssh_public_key
+
   shape                   = var.shape
   ocpus                   = var.ocpus
   memory_in_gbs           = var.memory_in_gbs
   boot_volume_size_gb     = var.boot_volume_size_gb
   boot_volume_vpus_per_gb = var.boot_volume_vpus_per_gb
 
+  # VNICs: [0] MGMT  [1] Indoor  [2] Untrust  [3] Heartbeat
+  vnics = [
+    {
+      # [0] MGMT – primary IP + reserved public IP (created by module)
+      name                   = "FW02-MGMT"
+      hostname_label         = "fw02-mgmt"
+      subnet_id              = oci_core_subnet.mgmt.id
+      private_ip             = "10.8.0.130"        # REPLACE_FW02_MGMT_IP
+      secondary_private_ip   = null
+      assign_public_ip       = true
+      skip_source_dest_check = false
+    },
+    {
+      # [1] Indoor – primary IP only
+      name                   = "FW02-INDOOR"
+      hostname_label         = "fw02-indoor"
+      subnet_id              = oci_core_subnet.indoor.id
+      private_ip             = "10.8.0.194"       # REPLACE_FW02_INDOOR_IP
+      secondary_private_ip   = null
+      assign_public_ip       = false
+      skip_source_dest_check = true
+    },
+    {
+      # [2] Untrust – primary IP only
+      name                   = "FW02-UNTRUST"
+      hostname_label         = "fw02-untrust"
+      subnet_id              = oci_core_subnet.untrust.id
+      private_ip             = "10.8.0.226"       # REPLACE_FW02_UNTRUST_IP
+      secondary_private_ip   = null
+      assign_public_ip       = false
+      skip_source_dest_check = true
+    },
+    {
+      # [3] Heartbeat – primary IP only
+      name                   = "FW02-HEARTBEAT"
+      hostname_label         = "fw02-heartbeat"
+      subnet_id              = oci_core_subnet.heartbeat.id
+      private_ip             = "10.8.0.242"      # REPLACE_FW02_HEARTBEAT_IP
+      secondary_private_ip   = null
+      assign_public_ip       = false
+      skip_source_dest_check = true
+    }
+  ]
+
   depends_on = [oci_core_app_catalog_subscription.sub]
 }
+
 
 # ---------------- Outputs ----------------
 output "vm_public_ips" {
