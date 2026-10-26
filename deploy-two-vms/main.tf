@@ -195,6 +195,18 @@ variable "spoke_cidrs" {
   default     = []
 }
 
+variable "onprem_cidrs" {
+  description = "List of On-Premises CIDR blocks (e.g. ['172.16.0.0/16']) routed through FortiGate"
+  type        = list(string)
+  default     = []
+}
+
+variable "manage_drg_transit_routing" {
+  description = "Whether to configure DRG route tables (RT-Hub, RT-Spoke, RT-OnPrem, Import-Hub) for central firewall transit routing"
+  type        = bool
+  default     = true
+}
+
 
 provider "oci" {
   region = var.region

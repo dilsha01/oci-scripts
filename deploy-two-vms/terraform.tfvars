@@ -43,5 +43,11 @@ create_service_gateway  = true
 create_drg              = true
 
 # Spoke CIDRs routed via DRG and FortiGate (e.g. ["10.50.2.0/25", "10.50.2.128/25"])
-spoke_cidrs = []
+spoke_cidrs = ["10.9.0.0/24"]
+
+# On-Premises CIDRs routed through FortiGate (e.g. ["172.16.0.0/16"])
+onprem_cidrs = []
+
+# Manage full DRG Transit Routing (RT-Spoke, RT-Hub, RT-OnPrem, Import-Hub)
+manage_drg_transit_routing = true
 

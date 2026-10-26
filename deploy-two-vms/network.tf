@@ -157,14 +157,133 @@ resource "oci_core_drg" "drg" {
   }
 }
 
+# Effective Gateway OCIDs & Plan-time Known Booleans
+locals {
+  has_drg            = var.drg_ocid != "" || var.create_drg
+  has_igw            = var.internet_gateway_ocid != "" || var.create_internet_gateway
+  has_nat            = var.nat_gateway_ocid != "" || var.create_nat_gateway
+  has_sgw            = var.service_gateway_ocid != "" || var.create_service_gateway
+  enable_drg_transit = local.has_drg && var.manage_drg_transit_routing
+
+  effective_igw_id = var.internet_gateway_ocid != "" ? var.internet_gateway_ocid : try(oci_core_internet_gateway.igw[0].id, "")
+  effective_nat_id = var.nat_gateway_ocid != "" ? var.nat_gateway_ocid : try(oci_core_nat_gateway.nat[0].id, "")
+  effective_sgw_id = var.service_gateway_ocid != "" ? var.service_gateway_ocid : try(oci_core_service_gateway.sgw[0].id, "")
+  effective_drg_id = var.drg_ocid != "" ? var.drg_ocid : try(oci_core_drg.drg[0].id, "")
+  all_target_cidrs = distinct(concat(var.spoke_cidrs, var.onprem_cidrs))
+}
+
+# =============================================================================
+# DRG Transit Routing Configuration (OCI Transit Routing Architecture)
+# =============================================================================
+
+# DRG Route Table 1: RT-Spoke (forces all spoke-to-spoke/outbound traffic to Hub VCN)
+resource "oci_core_drg_route_table" "rt_spoke" {
+  count        = local.enable_drg_transit ? 1 : 0
+  drg_id       = local.effective_drg_id
+  display_name = "RT-Spoke"
+
+  lifecycle {
+    ignore_changes = [defined_tags, freeform_tags]
+  }
+}
+
+# DRG Import Route Distribution: Import-Hub (imports routes from all VCN & On-Prem attachments)
+resource "oci_core_drg_route_distribution" "import_hub" {
+  count             = local.enable_drg_transit ? 1 : 0
+  drg_id            = local.effective_drg_id
+  distribution_type = "IMPORT"
+  display_name      = "Import-Hub"
+
+  lifecycle {
+    ignore_changes = [defined_tags, freeform_tags]
+  }
+}
+
+# Statement 10: Import spoke VCN routes
+resource "oci_core_drg_route_distribution_statement" "import_spokes" {
+  count                     = local.enable_drg_transit ? 1 : 0
+  drg_route_distribution_id = oci_core_drg_route_distribution.import_hub[0].id
+  action                    = "ACCEPT"
+  priority                  = 10
+
+  match_criteria {
+    match_type      = "DRG_ATTACHMENT_TYPE"
+    attachment_type = "VCN"
+  }
+}
+
+# Statement 20: Import On-Premises FastConnect virtual circuits
+resource "oci_core_drg_route_distribution_statement" "import_virtual_circuits" {
+  count                     = local.enable_drg_transit ? 1 : 0
+  drg_route_distribution_id = oci_core_drg_route_distribution.import_hub[0].id
+  action                    = "ACCEPT"
+  priority                  = 20
+
+  match_criteria {
+    match_type      = "DRG_ATTACHMENT_TYPE"
+    attachment_type = "VIRTUAL_CIRCUIT"
+  }
+}
+
+# Statement 30: Import On-Premises IPSec VPN tunnels
+resource "oci_core_drg_route_distribution_statement" "import_ipsec" {
+  count                     = local.enable_drg_transit ? 1 : 0
+  drg_route_distribution_id = oci_core_drg_route_distribution.import_hub[0].id
+  action                    = "ACCEPT"
+  priority                  = 30
+
+  match_criteria {
+    match_type      = "DRG_ATTACHMENT_TYPE"
+    attachment_type = "IPSEC_TUNNEL"
+  }
+}
+
+# DRG Route Table 2: RT-Hub (used by Hub VCN attachment, evaluates routes imported by Import-Hub)
+resource "oci_core_drg_route_table" "rt_hub" {
+  count                            = local.enable_drg_transit ? 1 : 0
+  drg_id                           = local.effective_drg_id
+  display_name                     = "RT-Hub"
+  import_drg_route_distribution_id = oci_core_drg_route_distribution.import_hub[0].id
+
+  lifecycle {
+    ignore_changes = [defined_tags, freeform_tags]
+  }
+}
+
+# DRG Route Table 3: RT-OnPrem (used by on-prem attachments to steer inbound on-prem traffic to Hub VCN)
+resource "oci_core_drg_route_table" "rt_onprem" {
+  count        = local.enable_drg_transit ? 1 : 0
+  drg_id       = local.effective_drg_id
+  display_name = "RT-OnPrem"
+
+  lifecycle {
+    ignore_changes = [defined_tags, freeform_tags]
+  }
+}
+
+# Static route in RT-OnPrem for each Spoke CIDR + Hub CIDR pointing to the Hub VCN Attachment
+resource "oci_core_drg_route_table_route_rule" "onprem_to_hub" {
+  for_each                   = local.enable_drg_transit ? toset(concat(var.spoke_cidrs, [data.oci_core_vcns.vcn.virtual_networks[0].cidr_block])) : []
+  drg_route_table_id         = oci_core_drg_route_table.rt_onprem[0].id
+  destination                = each.value
+  destination_type           = "CIDR_BLOCK"
+  next_hop_drg_attachment_id = oci_core_drg_attachment.drg_attachment[0].id
+}
+
+# Hub VCN DRG Attachment: links DRG to VCN-Hub with Ingress inspection route table
 resource "oci_core_drg_attachment" "drg_attachment" {
-  count        = var.create_drg && var.drg_ocid == "" ? 1 : 0
-  drg_id       = oci_core_drg.drg[0].id
+  count        = local.has_drg ? 1 : 0
+  drg_id       = local.effective_drg_id
   display_name = "hub-drg-attachment"
 
+  # Traffic entering DRG from Hub VCN uses RT-Hub (evaluates imported routes back to spokes)
+  drg_route_table_id = try(oci_core_drg_route_table.rt_hub[0].id, null)
+
   network_details {
-    id   = var.vcn_ocid
-    type = "VCN"
+    id             = var.vcn_ocid
+    type           = "VCN"
+    # Associates VCN Transit Ingress route table: steers all incoming traffic to FortiGate Indoor Private IP
+    route_table_id = oci_core_route_table.ingress.id
   }
 
   lifecycle {
@@ -172,12 +291,13 @@ resource "oci_core_drg_attachment" "drg_attachment" {
   }
 }
 
-# Effective Gateway OCIDs (prefers user-provided OCID, falls back to newly created gateway)
-locals {
-  effective_igw_id = var.internet_gateway_ocid != "" ? var.internet_gateway_ocid : try(oci_core_internet_gateway.igw[0].id, "")
-  effective_nat_id = var.nat_gateway_ocid != "" ? var.nat_gateway_ocid : try(oci_core_nat_gateway.nat[0].id, "")
-  effective_sgw_id = var.service_gateway_ocid != "" ? var.service_gateway_ocid : try(oci_core_service_gateway.sgw[0].id, "")
-  effective_drg_id = var.drg_ocid != "" ? var.drg_ocid : try(oci_core_drg.drg[0].id, "")
+# Static default route (0.0.0.0/0) in RT-Spoke directing all spoke traffic into Hub VCN Attachment
+resource "oci_core_drg_route_table_route_rule" "spoke_default_to_hub" {
+  count                      = local.enable_drg_transit ? 1 : 0
+  drg_route_table_id         = oci_core_drg_route_table.rt_spoke[0].id
+  destination                = "0.0.0.0/0"
+  destination_type           = "CIDR_BLOCK"
+  next_hop_drg_attachment_id = oci_core_drg_attachment.drg_attachment[0].id
 }
 
 # -----------------------------------------------------------------------------
@@ -191,7 +311,7 @@ resource "oci_core_route_table" "mgmt" {
   display_name   = "mgmt-subnet-route-table"
 
   dynamic "route_rules" {
-    for_each = local.effective_igw_id != "" ? [1] : []
+    for_each = local.has_igw ? [1] : []
     content {
       destination       = "0.0.0.0/0"
       destination_type  = "CIDR_BLOCK"
@@ -201,12 +321,12 @@ resource "oci_core_route_table" "mgmt" {
   }
 
   dynamic "route_rules" {
-    for_each = local.effective_drg_id != "" ? var.spoke_cidrs : []
+    for_each = local.has_drg ? local.all_target_cidrs : []
     content {
       destination       = route_rules.value
       destination_type  = "CIDR_BLOCK"
       network_entity_id = local.effective_drg_id
-      description       = "Traffic destined for spoke CIDR ${route_rules.value} is routed through the DRG"
+      description       = "Traffic destined for spoke/on-prem CIDR ${route_rules.value} is routed through the DRG"
     }
   }
 
@@ -222,7 +342,7 @@ resource "oci_core_route_table" "indoor" {
   display_name   = "indoor-subnet-route-table"
 
   dynamic "route_rules" {
-    for_each = local.effective_drg_id != "" ? [1] : []
+    for_each = local.has_drg ? [1] : []
     content {
       destination       = "0.0.0.0/0"
       destination_type  = "CIDR_BLOCK"
@@ -232,17 +352,17 @@ resource "oci_core_route_table" "indoor" {
   }
 
   dynamic "route_rules" {
-    for_each = local.effective_drg_id != "" ? var.spoke_cidrs : []
+    for_each = local.has_drg ? local.all_target_cidrs : []
     content {
       destination       = route_rules.value
       destination_type  = "CIDR_BLOCK"
       network_entity_id = local.effective_drg_id
-      description       = "Traffic destined for spoke CIDR ${route_rules.value} is routed through the DRG"
+      description       = "Traffic destined for spoke/on-prem CIDR ${route_rules.value} is routed through the DRG"
     }
   }
 
   dynamic "route_rules" {
-    for_each = local.effective_sgw_id != "" ? [1] : []
+    for_each = local.has_sgw ? [1] : []
     content {
       destination       = data.oci_core_services.all_services.services[0].cidr_block
       destination_type  = "SERVICE_CIDR_BLOCK"
@@ -263,17 +383,17 @@ resource "oci_core_route_table" "untrust" {
   display_name   = "outdoor-subnet-route-table"
 
   dynamic "route_rules" {
-    for_each = local.effective_nat_id != "" ? [local.effective_nat_id] : (local.effective_igw_id != "" ? [local.effective_igw_id] : [])
+    for_each = (local.has_nat || local.has_igw) ? [1] : []
     content {
       destination       = "0.0.0.0/0"
       destination_type  = "CIDR_BLOCK"
-      network_entity_id = route_rules.value
+      network_entity_id = local.has_nat ? local.effective_nat_id : local.effective_igw_id
       description       = "Default outbound traffic route"
     }
   }
 
   dynamic "route_rules" {
-    for_each = local.effective_sgw_id != "" ? [1] : []
+    for_each = local.has_sgw ? [1] : []
     content {
       destination       = data.oci_core_services.all_services.services[0].cidr_block
       destination_type  = "SERVICE_CIDR_BLOCK"
@@ -294,12 +414,64 @@ resource "oci_core_route_table" "ingress" {
   display_name   = "VCN-Hub-Ingress"
 
   dynamic "route_rules" {
-    for_each = var.spoke_cidrs
+    for_each = local.all_target_cidrs
     content {
       destination       = route_rules.value
       destination_type  = "CIDR_BLOCK"
       network_entity_id = module.fw_vm_01.secondary_private_ip_ids["1"]
       description       = "Transit ingress route to FortiGate Indoor Private IP for inspection"
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [defined_tags, freeform_tags]
+  }
+}
+
+# 5. Web / Workload Subnet Route Table
+resource "oci_core_route_table" "web" {
+  compartment_id = local.net_compartment
+  vcn_id         = var.vcn_ocid
+  display_name   = "web-subnet-route-table"
+
+  dynamic "route_rules" {
+    for_each = local.has_igw ? [1] : []
+    content {
+      destination       = "0.0.0.0/0"
+      destination_type  = "CIDR_BLOCK"
+      network_entity_id = local.effective_igw_id
+      description       = "Traffic destined for networks outside the VCN is routed through the Internet Gateway"
+    }
+  }
+
+  dynamic "route_rules" {
+    for_each = local.has_drg ? local.all_target_cidrs : []
+    content {
+      destination       = route_rules.value
+      destination_type  = "CIDR_BLOCK"
+      network_entity_id = local.effective_drg_id
+      description       = "Traffic destined for spoke/on-prem CIDR ${route_rules.value} is routed through the DRG"
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [defined_tags, freeform_tags]
+  }
+}
+
+# 6. Hub VCN Ingress Route Table (Service Gateway Ingress)
+resource "oci_core_route_table" "hub_ingress" {
+  compartment_id = local.net_compartment
+  vcn_id         = var.vcn_ocid
+  display_name   = "hub-vcn-ingress-route-table"
+
+  dynamic "route_rules" {
+    for_each = local.has_sgw ? [1] : []
+    content {
+      destination       = data.oci_core_services.all_services.services[0].cidr_block
+      destination_type  = "SERVICE_CIDR_BLOCK"
+      network_entity_id = local.effective_sgw_id
+      description       = "Traffic destined for all OCI services in Oracle Services Network is routed through Service Gateway"
     }
   }
 
@@ -326,10 +498,24 @@ output "route_table_ids" {
   description = "OCIDs of the created route tables"
 
   value = {
-    mgmt    = oci_core_route_table.mgmt.id
-    indoor  = oci_core_route_table.indoor.id
-    untrust = oci_core_route_table.untrust.id
-    ingress = oci_core_route_table.ingress.id
+    mgmt        = oci_core_route_table.mgmt.id
+    indoor      = oci_core_route_table.indoor.id
+    untrust     = oci_core_route_table.untrust.id
+    ingress     = oci_core_route_table.ingress.id
+    web         = oci_core_route_table.web.id
+    hub_ingress = oci_core_route_table.hub_ingress.id
+  }
+}
+
+output "drg_transit_routing" {
+  description = "OCIDs of the DRG Transit Route Tables and Distributions"
+
+  value = {
+    rt_spoke           = try(oci_core_drg_route_table.rt_spoke[0].id, null)
+    rt_hub             = try(oci_core_drg_route_table.rt_hub[0].id, null)
+    rt_onprem          = try(oci_core_drg_route_table.rt_onprem[0].id, null)
+    import_hub         = try(oci_core_drg_route_distribution.import_hub[0].id, null)
+    hub_drg_attachment = try(oci_core_drg_attachment.drg_attachment[0].id, null)
   }
 }
 
