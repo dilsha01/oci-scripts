@@ -95,6 +95,8 @@ RT-Spoke              : ${try(oci_core_drg_route_table.rt_spoke[0].id, "N/A")}
 RT-Hub                : ${try(oci_core_drg_route_table.rt_hub[0].id, "N/A")}
 RT-OnPrem             : ${try(oci_core_drg_route_table.rt_onprem[0].id, "N/A")}
 Import-Hub            : ${try(oci_core_drg_route_distribution.import_hub[0].id, "N/A")}
+Managed Spoke Attachments : ${jsonencode({ for name, attachment in oci_core_drg_attachment.spoke : name => attachment.id })}
+Managed Spoke Route Tables: ${jsonencode({ for name, route_table in oci_core_route_table.spoke_workload : name => route_table.id })}
 
 --------------------------------------------------------------------------------
 7. IAM ROLES & POLICIES

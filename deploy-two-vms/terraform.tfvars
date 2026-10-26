@@ -2,7 +2,7 @@ region           = "ap-hyderabad-1"
 tenancy_ocid     = "ocid1.tenancy.oc1..aaaaaaaavnwzahmwtpputxfnfrds57n7doyqig4532egavitx64o5kpbpbva"
 compartment_ocid = "ocid1.compartment.oc1..aaaaaaaapn6w4llsutvzm42o527nap5dghqnbnoikwxgzwosslmvr5fvp7ha"
 
-vcn_ocid    = "ocid1.vcn.oc1.ap-hyderabad-1.amaaaaaazv23a4aaxicwhtrk5ymgr7grbtni7jh5jjhk3bjelebl3u6r7nqa"
+vcn_ocid = "ocid1.vcn.oc1.ap-hyderabad-1.amaaaaaazv23a4aaxicwhtrk5ymgr7grbtni7jh5jjhk3bjelebl3u6r7nqa"
 
 ad_index = 0
 
@@ -42,8 +42,31 @@ create_nat_gateway      = true
 create_service_gateway  = true
 create_drg              = true
 
-# Spoke CIDRs routed via DRG and FortiGate (e.g. ["10.50.2.0/25", "10.50.2.128/25"])
-spoke_cidrs = ["10.9.0.0/24"]
+# Legacy list of spoke CIDRs routed via DRG and FortiGate. When using the
+# spokes map below, Terraform derives these CIDRs automatically.
+#spoke_cidrs = ["10.9.0.0/24", "10.10.0.0/24"]
+
+# Managed spoke-side configuration. Uncomment and replace every placeholder to
+# create each VCN attachment, assign RT-Spoke, and associate a new route table
+# with each listed workload subnet. route_cidrs defaults to ["0.0.0.0/0"].
+# The new route table replaces the subnet's current route-table association.
+#
+ spokes = {
+   spoke_a = {
+     compartment_id      = "ocid1.compartment.oc1..aaaaaaaapn6w4llsutvzm42o527nap5dghqnbnoikwxgzwosslmvr5fvp7ha"
+     vcn_id              = "ocid1.vcn.oc1.ap-hyderabad-1.amaaaaaazv23a4aavlmi67o3tenuemrdbeb7mbtfqnlvj3rjsftujo2tobsa"
+     cidrs               = ["10.9.0.0/24"]
+     workload_subnet_ids = ["ocid1.subnet.oc1.ap-hyderabad-1.aaaaaaaaepznu7mj3vcqzbgwe6j2vkpakprncca5fqr7fa56in54oh7ynnia"]
+     route_cidrs       = ["0.0.0.0/0"]
+   }
+   spoke_b = {
+     compartment_id      = "ocid1.compartment.oc1..aaaaaaaapn6w4llsutvzm42o527nap5dghqnbnoikwxgzwosslmvr5fvp7ha"
+     vcn_id              = "ocid1.vcn.oc1.ap-hyderabad-1.amaaaaaazv23a4aaf2exwtjgsi6n2ndlekqfgcdofxg7io2lk6fxuvtzvzla"
+     cidrs               = ["10.10.0.0/24"]
+     workload_subnet_ids = ["ocid1.subnet.oc1.ap-hyderabad-1.aaaaaaaakdxbr7p73xedwcfetc2a6hnkval2bpsbbqiqvplwudvuapaz2fma"]
+     route_cidrs       = ["0.0.0.0/0"]
+   }
+ }
 
 # On-Premises CIDRs routed through FortiGate (e.g. ["172.16.0.0/16"])
 onprem_cidrs = []
@@ -55,6 +78,5 @@ manage_drg_transit_routing = true
 create_iam_resources    = true
 dynamic_group_name      = "fgt-ha-dynamic-group"
 policy_name             = "fgt-ha-policy"
-use_granular_iam_policy = true  # true = 7 minimum sufficient permissions, false = virtual-network-family
-
+use_granular_iam_policy = true # true = 7 minimum sufficient permissions, false = virtual-network-family
 

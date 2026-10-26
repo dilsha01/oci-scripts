@@ -1,0 +1,96 @@
+================================================================================
+           FORTIGATE ACTIVE-PASSIVE HA & OCI TRANSIT ROUTING DEPLOYMENT
+================================================================================
+Region          : ap-hyderabad-1
+VCN Name        : MY-TEST-VCN
+VCN OCID        : ocid1.vcn.oc1.ap-hyderabad-1.amaaaaaazv23a4aaxicwhtrk5ymgr7grbtni7jh5jjhk3bjelebl3u6r7nqa
+
+--------------------------------------------------------------------------------
+1. FIREWALL WEB GUI & SSH ACCESS CREDENTIALS
+--------------------------------------------------------------------------------
+FW01 (Primary Active):
+  URL           : https://140.245.244.67
+  Username      : admin
+  Initial Pwd   : ocid1.instance.oc1.ap-hyderabad-1.anuhsljrzv23a4ac24qf2d7dkaqlqmdplj5he6twsjr6t2kdxyoqpwtmjtjq
+  MGMT Priv IP  : 10.8.0.132
+  MGMT Pub IP   : 140.245.244.67
+
+FW02 (Secondary Passive):
+  URL           : https://129.225.71.226
+  Username      : admin
+  Initial Pwd   : ocid1.instance.oc1.ap-hyderabad-1.anuhsljrzv23a4acvptsgqnyob5zpcyvz5casoxrr6dw7x7kvphj2mdc7wfq
+  MGMT Priv IP  : 10.8.0.130
+  MGMT Pub IP   : 129.225.71.226
+
+--------------------------------------------------------------------------------
+2. FLOATING HA & SHARED TRAFFIC IPS
+--------------------------------------------------------------------------------
+Shared Traffic Public IP (VIP) : 129.225.74.88
+Untrust HA Movable IP (Port 3) : 10.8.0.229 (Attached to FW01 port3)
+Indoor HA Movable IP  (Port 2) : 10.8.0.197 (Gateway for spokes)
+
+--------------------------------------------------------------------------------
+3. SUBNETS
+--------------------------------------------------------------------------------
+MGMT Subnet (port1)      : 10.8.0.128/26  [PR-HUB-MGMT]
+  OCID                   : ocid1.subnet.oc1.ap-hyderabad-1.aaaaaaaazzwa7mjjq66wmjn4c2vh5orvfg4adaookkzhdkyojxu2zh7347aq
+  Route Table Attached   : mgmt-subnet-route-table
+
+Indoor / Trust (port2)   : 10.8.0.192/27  [PR-INDOOR]
+  OCID                   : ocid1.subnet.oc1.ap-hyderabad-1.aaaaaaaasfhts3qri7wo4pnxpgyxhawwzoizq3qeqaucylljhkkhj2wgqzvq
+  Route Table Attached   : indoor-subnet-route-table
+
+Untrust / DMZ (port3)    : 10.8.0.224/28  [PR-DMZ]
+  OCID                   : ocid1.subnet.oc1.ap-hyderabad-1.aaaaaaaavpflnc3fetzdy7uiis2mi5diwqk4hdh7qwcyi7y3e2xx4d2ehdaa
+  Route Table Attached   : outdoor-subnet-route-table
+
+Heartbeat (port4)        : 10.8.0.240/28  [PR-HEARTBEA]
+  OCID                   : ocid1.subnet.oc1.ap-hyderabad-1.aaaaaaaauh7qu26lvtq7zlnjenwzufc326tchta6klhqj26tiop22hmxpw4a
+  Route Table Attached   : Default Route Table for VCN (intra-subnet only)
+
+--------------------------------------------------------------------------------
+4. GATEWAYS
+--------------------------------------------------------------------------------
+Dynamic Routing Gateway (DRG) : ocid1.drg.oc1.ap-hyderabad-1.aaaaaaaaayhobwdzt4t67rzpi2mwkrqa2web723ieprxc2zo4qnayiwhen7q
+Internet Gateway (IGW)        : ocid1.internetgateway.oc1.ap-hyderabad-1.aaaaaaaa6l4k3rhqgl6q33msqzigmlcqacy522skkyra5kjvamhyfxafx5mq
+NAT Gateway (NATGW)           : ocid1.natgateway.oc1.ap-hyderabad-1.aaaaaaaa6wg5r6mclxkj4sovhazo754p2pyclebef7efmvo2mgybkcbny4fa
+Service Gateway (SGW)         : ocid1.servicegateway.oc1.ap-hyderabad-1.aaaaaaaadrcdmk3atk4uhdmynccskwee3mcgjsp6slccs5aghpn5y6cs4qqq
+
+--------------------------------------------------------------------------------
+5. VCN ROUTE TABLES
+--------------------------------------------------------------------------------
+VCN-Hub-Ingress (Transit Ingress)
+  OCID   : ocid1.routetable.oc1.ap-hyderabad-1.aaaaaaaauq26fmhqhhesqvuku2g7l4me4vz6wdmu3dbbbi2266xh5c4oeqia
+
+indoor-subnet-route-table
+  OCID   : ocid1.routetable.oc1.ap-hyderabad-1.aaaaaaaaeeyly4ixxayb7guz57sbfqlvktebu4lsaxbsdvazol47sidddskq
+
+mgmt-subnet-route-table
+  OCID   : ocid1.routetable.oc1.ap-hyderabad-1.aaaaaaaads66gb7dvziaf4efsbvmgvqbfjwh4callano4w43p7jt25g3y46a
+
+outdoor-subnet-route-table
+  OCID   : ocid1.routetable.oc1.ap-hyderabad-1.aaaaaaaackpfyip7yywjg7bageflb65ycqfvdjb5mhl3z4vurh5o6ok6zdgq
+
+web-subnet-route-table
+  OCID   : ocid1.routetable.oc1.ap-hyderabad-1.aaaaaaaapvb3bx43ags7a2mxtz4ltxulyhvz4nwd2tsgtrzn2ifw6f2dqypa
+
+hub-vcn-ingress-route-table
+  OCID   : ocid1.routetable.oc1.ap-hyderabad-1.aaaaaaaaas34rrxlynymmifafcizbsrmhihrbwd6l6u3aaoqraxbgsirytoa
+
+--------------------------------------------------------------------------------
+6. DRG CENTRAL TRANSIT ROUTING ARCHITECTURE
+--------------------------------------------------------------------------------
+Hub DRG Attachment    : ocid1.drgattachment.oc1.ap-hyderabad-1.aaaaaaaannllal46rpbu54fa2qnamkfwwixsbunog43tmgizhbweigx7mqja
+RT-Spoke              : ocid1.drgroutetable.oc1.ap-hyderabad-1.aaaaaaaaciskmldvjy37zss2w6er3fmcxqw3fzlbcw55qoq5ed44bgjfctqq
+RT-Hub                : ocid1.drgroutetable.oc1.ap-hyderabad-1.aaaaaaaa2tx4lbqhp5ab57ajlyvfpact4ftp4h6nhijts55pqojvzlpjmdsa
+RT-OnPrem             : ocid1.drgroutetable.oc1.ap-hyderabad-1.aaaaaaaaichn6rqelttx5cbhw56g6yf7n3mmcki3jlkncm7rdmexmz5yjw4a
+Import-Hub            : ocid1.drgroutedistribution.oc1.ap-hyderabad-1.aaaaaaaae7ugjxnwreahqrw7yrammbhjejoyndsme2s3tthzyroy7n6wguuq
+Managed Spoke Attachments : {"spoke_a":"ocid1.drgattachment.oc1.ap-hyderabad-1.aaaaaaaa5ir6f3xvcuixdse3gdnnyoedxfv245xb63rip4fvkkoz2x7k5ywa","spoke_b":"ocid1.drgattachment.oc1.ap-hyderabad-1.aaaaaaaaf4nxpjk4bawcdor7qtupvqf6275eze2txxk2f4t2tshikxrxonmq"}
+Managed Spoke Route Tables: {"spoke_a":"ocid1.routetable.oc1.ap-hyderabad-1.aaaaaaaaobohqwksyjhocr5ngthpr6d6yninezpykd6mujuytklcu5nzh3ua","spoke_b":"ocid1.routetable.oc1.ap-hyderabad-1.aaaaaaaaspk7tcg23y5ksw5hjiyuqbhf5ow6eg5ubws53be6zbhiourgadzq"}
+
+--------------------------------------------------------------------------------
+7. IAM ROLES & POLICIES
+--------------------------------------------------------------------------------
+Dynamic Group         : fgt-ha-dynamic-group (ocid1.dynamicgroup.oc1..aaaaaaaa6wvzpoknh5m7fhw6f3s7xpk6p3qblw2bbgz5fwd7cxrdllqsbbkq)
+IAM Policy            : fgt-ha-policy (ocid1.policy.oc1..aaaaaaaa45q255uulqc6meh2ntfbqmy4hpycrnmbuhl5ioa5tuik7rnrhaza)
+================================================================================

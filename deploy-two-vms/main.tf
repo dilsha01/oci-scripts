@@ -190,9 +190,35 @@ variable "create_drg" {
 }
 
 variable "spoke_cidrs" {
-  description = "List of Spoke CIDR blocks (e.g. ['10.50.2.0/25', '10.50.2.128/25']) routed via DRG and FortiGate"
+  description = "Legacy list of spoke CIDRs used for hub routes. Prefer the spokes map to also create spoke DRG attachments and subnet route tables."
   type        = list(string)
   default     = []
+}
+
+variable "spokes" {
+  description = <<-EOT
+    Spoke VCNs to attach to the DRG and route through FortiGate. Terraform creates
+    one DRG attachment and one route table per spoke, then associates that route
+    table with every workload_subnet_id. route_cidrs defaults to 0.0.0.0/0.
+    Include the VCN CIDR(s) in cidrs and use the VCN's own compartment OCID.
+  EOT
+
+  type = map(object({
+    compartment_id      = string
+    vcn_id              = string
+    cidrs               = list(string)
+    workload_subnet_ids = list(string)
+    route_cidrs         = optional(list(string), ["0.0.0.0/0"])
+  }))
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for spoke in values(var.spokes) :
+      length(spoke.cidrs) > 0 && length(spoke.workload_subnet_ids) > 0 && length(spoke.route_cidrs) > 0
+    ])
+    error_message = "Each spoke must provide at least one CIDR, workload subnet OCID, and route CIDR."
+  }
 }
 
 variable "onprem_cidrs" {
@@ -398,49 +424,49 @@ module "fw_vm_01" {
   boot_volume_vpus_per_gb = var.boot_volume_vpus_per_gb
 
   # VNICs: [0] MGMT  [1] Indoor  [2] Untrust  [3] Heartbeat
-  
-vnics = [
-  {
-    # port1: management, with a dedicated public IP
-    name                   = "FW01-MGMT"
-    hostname_label         = "fw01-mgmt"
-    subnet_id              = oci_core_subnet.mgmt.id
-    private_ip             = "10.8.0.132"
-    secondary_private_ip   = null
-    assign_public_ip       = true
-    skip_source_dest_check = false
-  },
-  {
-    # port2: indoor/trust, with a movable secondary IP
-    name                   = "FW01-INDOOR"
-    hostname_label         = "fw01-indoor"
-    subnet_id              = oci_core_subnet.indoor.id
-    private_ip             = "10.8.0.196"
-    secondary_private_ip   = var.fw01_indoor_ha_ip
-    assign_public_ip       = false
-    skip_source_dest_check = true
-  },
-  {
-    # port3: untrust, with a movable secondary IP
-    name                   = "FW01-UNTRUST"
-    hostname_label         = "fw01-untrust"
-    subnet_id              = oci_core_subnet.untrust.id
-    private_ip             = "10.8.0.228"
-    secondary_private_ip   = var.fw01_untrust_ha_ip
-    assign_public_ip       = false
-    skip_source_dest_check = true
-  },
-  {
-    # port4: dedicated heartbeat
-    name                   = "FW01-HEARTBEAT"
-    hostname_label         = "fw01-heartbeat"
-    subnet_id              = oci_core_subnet.heartbeat.id
-    private_ip             = "10.8.0.244"
-    secondary_private_ip   = null
-    assign_public_ip       = false
-    skip_source_dest_check = true
-  }
-]
+
+  vnics = [
+    {
+      # port1: management, with a dedicated public IP
+      name                   = "FW01-MGMT"
+      hostname_label         = "fw01-mgmt"
+      subnet_id              = oci_core_subnet.mgmt.id
+      private_ip             = "10.8.0.132"
+      secondary_private_ip   = null
+      assign_public_ip       = true
+      skip_source_dest_check = false
+    },
+    {
+      # port2: indoor/trust, with a movable secondary IP
+      name                   = "FW01-INDOOR"
+      hostname_label         = "fw01-indoor"
+      subnet_id              = oci_core_subnet.indoor.id
+      private_ip             = "10.8.0.196"
+      secondary_private_ip   = var.fw01_indoor_ha_ip
+      assign_public_ip       = false
+      skip_source_dest_check = true
+    },
+    {
+      # port3: untrust, with a movable secondary IP
+      name                   = "FW01-UNTRUST"
+      hostname_label         = "fw01-untrust"
+      subnet_id              = oci_core_subnet.untrust.id
+      private_ip             = "10.8.0.228"
+      secondary_private_ip   = var.fw01_untrust_ha_ip
+      assign_public_ip       = false
+      skip_source_dest_check = true
+    },
+    {
+      # port4: dedicated heartbeat
+      name                   = "FW01-HEARTBEAT"
+      hostname_label         = "fw01-heartbeat"
+      subnet_id              = oci_core_subnet.heartbeat.id
+      private_ip             = "10.8.0.244"
+      secondary_private_ip   = null
+      assign_public_ip       = false
+      skip_source_dest_check = true
+    }
+  ]
 
   depends_on = [oci_core_app_catalog_subscription.sub]
 }
@@ -461,49 +487,49 @@ module "fw_vm_02" {
   boot_volume_vpus_per_gb = var.boot_volume_vpus_per_gb
 
   # VNICs: [0] MGMT  [1] Indoor  [2] Untrust  [3] Heartbeat
-  
-vnics = [
-  {
-    # port1: dedicated standby management IP
-    name                   = "FW02-MGMT"
-    hostname_label         = "fw02-mgmt"
-    subnet_id              = oci_core_subnet.mgmt.id
-    private_ip             = "10.8.0.130"
-    secondary_private_ip   = null
-    assign_public_ip       = true
-    skip_source_dest_check = false
-  },
-  {
-    # port2: indoor/trust
-    name                   = "FW02-INDOOR"
-    hostname_label         = "fw02-indoor"
-    subnet_id              = oci_core_subnet.indoor.id
-    private_ip             = "10.8.0.194"
-    secondary_private_ip   = null
-    assign_public_ip       = false
-    skip_source_dest_check = true
-  },
-  {
-    # port3: untrust
-    name                   = "FW02-UNTRUST"
-    hostname_label         = "fw02-untrust"
-    subnet_id              = oci_core_subnet.untrust.id
-    private_ip             = "10.8.0.226"
-    secondary_private_ip   = null
-    assign_public_ip       = false
-    skip_source_dest_check = true
-  },
-  {
-    # port4: dedicated heartbeat
-    name                   = "FW02-HEARTBEAT"
-    hostname_label         = "fw02-heartbeat"
-    subnet_id              = oci_core_subnet.heartbeat.id
-    private_ip             = "10.8.0.242"
-    secondary_private_ip   = null
-    assign_public_ip       = false
-    skip_source_dest_check = true
-  }
-]
+
+  vnics = [
+    {
+      # port1: dedicated standby management IP
+      name                   = "FW02-MGMT"
+      hostname_label         = "fw02-mgmt"
+      subnet_id              = oci_core_subnet.mgmt.id
+      private_ip             = "10.8.0.130"
+      secondary_private_ip   = null
+      assign_public_ip       = true
+      skip_source_dest_check = false
+    },
+    {
+      # port2: indoor/trust
+      name                   = "FW02-INDOOR"
+      hostname_label         = "fw02-indoor"
+      subnet_id              = oci_core_subnet.indoor.id
+      private_ip             = "10.8.0.194"
+      secondary_private_ip   = null
+      assign_public_ip       = false
+      skip_source_dest_check = true
+    },
+    {
+      # port3: untrust
+      name                   = "FW02-UNTRUST"
+      hostname_label         = "fw02-untrust"
+      subnet_id              = oci_core_subnet.untrust.id
+      private_ip             = "10.8.0.226"
+      secondary_private_ip   = null
+      assign_public_ip       = false
+      skip_source_dest_check = true
+    },
+    {
+      # port4: dedicated heartbeat
+      name                   = "FW02-HEARTBEAT"
+      hostname_label         = "fw02-heartbeat"
+      subnet_id              = oci_core_subnet.heartbeat.id
+      private_ip             = "10.8.0.242"
+      secondary_private_ip   = null
+      assign_public_ip       = false
+      skip_source_dest_check = true
+    }
+  ]
 
 
   depends_on = [oci_core_app_catalog_subscription.sub]

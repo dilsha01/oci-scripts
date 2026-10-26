@@ -7,8 +7,10 @@ needed by the FortiGate OCI Fabric Connector to move the floating IPs during a
 failover.
 
 It is intentionally **not** a complete landing-zone deployment: the hub VCN,
-spoke VCNs, their workload subnets, their DRG attachments, and their security
-rules must already exist or be managed separately.
+spoke VCNs, and their workload subnets must already exist. When configured in
+the `spokes` input, Terraform creates the spoke DRG attachments and workload
+subnet route tables. Security rules and FortiGate policies remain your
+responsibility.
 
 ## Before you run Terraform
 
@@ -73,32 +75,51 @@ resource nor inside OCI's reserved addresses for their subnet.
 
 ## Two spokes
 
-For two spoke VCNs, put **one CIDR per spoke VCN** in `spoke_cidrs`. For
-example, if spoke A is `10.9.0.0/24` and spoke B is `10.10.0.0/24`:
+For two spoke VCNs, use the `spokes` map. Terraform will create each spoke
+attachment, associate it with `RT-Spoke`, create a dedicated route table, and
+attach that route table to every workload subnet you list. For example:
 
 ```hcl
-spoke_cidrs = [
-  "10.9.0.0/24",  # Spoke A VCN
-  "10.10.0.0/24", # Spoke B VCN
-]
+spokes = {
+  spoke_a = {
+    compartment_id      = "ocid1.compartment.oc1..SPOKE_A_COMPARTMENT_OCID"
+    vcn_id              = "ocid1.vcn.oc1.ap-hyderabad-1.SPOKE_A_VCN_OCID"
+    cidrs               = ["10.9.0.0/24"]
+    workload_subnet_ids = ["ocid1.subnet.oc1.ap-hyderabad-1.SPOKE_A_SUBNET_OCID"]
+    route_cidrs         = ["0.0.0.0/0"]
+  }
+  spoke_b = {
+    compartment_id      = "ocid1.compartment.oc1..SPOKE_B_COMPARTMENT_OCID"
+    vcn_id              = "ocid1.vcn.oc1.ap-hyderabad-1.SPOKE_B_VCN_OCID"
+    cidrs               = ["10.10.0.0/24"]
+    workload_subnet_ids = ["ocid1.subnet.oc1.ap-hyderabad-1.SPOKE_B_SUBNET_OCID"]
+    route_cidrs         = ["0.0.0.0/0"]
+  }
+}
 ```
 
-Use every routed CIDR if a spoke contains multiple address ranges. The list
-drives the routes created in the hub route tables and the FortiGate transit
-ingress route table. Re-run `terraform plan` and `terraform apply` after
-changing it.
+Use every routed VCN CIDR in `cidrs`. `route_cidrs` defaults to `0.0.0.0/0`,
+which makes all workload-subnet traffic use the inspection path. Supply a
+smaller list instead if only selected destinations require inspection. The
+configured CIDRs drive the hub return routes and the FortiGate transit ingress
+route table. Re-run `terraform plan` and `terraform apply` after changing it.
 
-Terraform creates the **hub** DRG attachment and the `RT-Spoke`, `RT-Hub`, and
-`RT-OnPrem` DRG route tables. It does **not** create attachments for the spoke
-VCNs. For each of the two spokes, complete the following in OCI (or manage the
-same resources in separate Terraform code):
+Each managed spoke VCN must not already have a DRG attachment. If it does,
+import that attachment into the matching `oci_core_drg_attachment.spoke` state
+address before applying, or remove it from `spokes` and manage the association
+outside this configuration. A VCN can be attached to only one DRG.
 
-1. Attach the spoke VCN to the same DRG created/reused by this deployment.
-2. Associate that spoke attachment with `RT-Spoke`. This makes its default DRG
-   route send traffic to the hub VCN attachment for firewall inspection.
-3. In each spoke workload subnet route table, add routes for the destinations
-   that must be inspected—commonly `0.0.0.0/0`, or selected hub, other-spoke,
-   and on-premises CIDRs—with the spoke's DRG attachment as the target.
+Terraform creates the hub DRG attachment plus `RT-Spoke`, `RT-Hub`, and
+`RT-OnPrem`. With `spokes` populated, it also completes the first three items
+below for each spoke:
+
+1. Terraform attaches the spoke VCN to the same DRG and applies `RT-Spoke`.
+2. Terraform creates a dedicated route table and attaches it to the supplied
+   `workload_subnet_ids`. This **replaces** each subnet's current route-table
+   association. Put all required routes in `route_cidrs`; do not use this on a
+   subnet that needs unmanaged routes retained.
+3. Terraform routes each `route_cidrs` destination to the DRG; `0.0.0.0/0` is
+   the default inspection route.
 4. Confirm the spoke VCN CIDR is advertised/imported by the DRG attachment.
    `Import-Hub` accepts VCN attachment routes, and `RT-Hub` is already attached
    to the hub VCN attachment by this configuration.

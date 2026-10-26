@@ -165,11 +165,25 @@ locals {
   has_sgw            = var.service_gateway_ocid != "" || var.create_service_gateway
   enable_drg_transit = local.has_drg && var.manage_drg_transit_routing
 
-  effective_igw_id = var.internet_gateway_ocid != "" ? var.internet_gateway_ocid : try(oci_core_internet_gateway.igw[0].id, "")
-  effective_nat_id = var.nat_gateway_ocid != "" ? var.nat_gateway_ocid : try(oci_core_nat_gateway.nat[0].id, "")
-  effective_sgw_id = var.service_gateway_ocid != "" ? var.service_gateway_ocid : try(oci_core_service_gateway.sgw[0].id, "")
-  effective_drg_id = var.drg_ocid != "" ? var.drg_ocid : try(oci_core_drg.drg[0].id, "")
-  all_target_cidrs = distinct(concat(var.spoke_cidrs, var.onprem_cidrs))
+  effective_igw_id    = var.internet_gateway_ocid != "" ? var.internet_gateway_ocid : try(oci_core_internet_gateway.igw[0].id, "")
+  effective_nat_id    = var.nat_gateway_ocid != "" ? var.nat_gateway_ocid : try(oci_core_nat_gateway.nat[0].id, "")
+  effective_sgw_id    = var.service_gateway_ocid != "" ? var.service_gateway_ocid : try(oci_core_service_gateway.sgw[0].id, "")
+  effective_drg_id    = var.drg_ocid != "" ? var.drg_ocid : try(oci_core_drg.drg[0].id, "")
+  managed_spoke_cidrs = flatten([for spoke in values(var.spokes) : spoke.cidrs])
+  all_spoke_cidrs     = distinct(concat(var.spoke_cidrs, local.managed_spoke_cidrs))
+  all_target_cidrs    = distinct(concat(local.all_spoke_cidrs, var.onprem_cidrs))
+
+  spoke_subnet_route_table_attachments = {
+    for attachment in flatten([
+      for spoke_key, spoke in var.spokes : [
+        for subnet_id in spoke.workload_subnet_ids : {
+          key       = "${spoke_key}/${subnet_id}"
+          spoke_key = spoke_key
+          subnet_id = subnet_id
+        }
+      ]
+    ]) : attachment.key => attachment
+  }
 }
 
 # =============================================================================
@@ -280,10 +294,29 @@ resource "oci_core_drg_attachment" "drg_attachment" {
   drg_route_table_id = try(oci_core_drg_route_table.rt_hub[0].id, null)
 
   network_details {
-    id             = var.vcn_ocid
-    type           = "VCN"
+    id   = var.vcn_ocid
+    type = "VCN"
     # Associates VCN Transit Ingress route table: steers all incoming traffic to FortiGate Indoor Private IP
     route_table_id = oci_core_route_table.ingress.id
+  }
+
+  lifecycle {
+    ignore_changes = [defined_tags, freeform_tags]
+  }
+}
+
+# Spoke VCN attachments. Each attachment uses RT-Spoke so traffic entering the
+# DRG from a spoke first goes to the hub VCN and FortiGate for inspection.
+resource "oci_core_drg_attachment" "spoke" {
+  for_each = local.enable_drg_transit ? var.spokes : {}
+
+  drg_id             = local.effective_drg_id
+  display_name       = "${each.key}-drg-attachment"
+  drg_route_table_id = oci_core_drg_route_table.rt_spoke[0].id
+
+  network_details {
+    id   = each.value.vcn_id
+    type = "VCN"
   }
 
   lifecycle {
@@ -298,6 +331,40 @@ resource "oci_core_drg_route_table_route_rule" "spoke_default_to_hub" {
   destination                = "0.0.0.0/0"
   destination_type           = "CIDR_BLOCK"
   next_hop_drg_attachment_id = oci_core_drg_attachment.drg_attachment[0].id
+}
+
+# A dedicated route table is created for each managed spoke. Associating it
+# with the supplied workload subnets replaces their current route-table
+# association, so include every required destination in route_cidrs.
+resource "oci_core_route_table" "spoke_workload" {
+  for_each = local.enable_drg_transit ? var.spokes : {}
+
+  compartment_id = each.value.compartment_id
+  vcn_id         = each.value.vcn_id
+  display_name   = "${each.key}-workload-to-drg"
+
+  dynamic "route_rules" {
+    for_each = toset(each.value.route_cidrs)
+    content {
+      destination       = route_rules.value
+      destination_type  = "CIDR_BLOCK"
+      network_entity_id = local.effective_drg_id
+      description       = "Inspected traffic from ${each.key} is routed through the DRG and FortiGate"
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [defined_tags, freeform_tags]
+  }
+
+  depends_on = [oci_core_drg_attachment.spoke]
+}
+
+resource "oci_core_route_table_attachment" "spoke_workload" {
+  for_each = local.enable_drg_transit ? local.spoke_subnet_route_table_attachments : {}
+
+  subnet_id      = each.value.subnet_id
+  route_table_id = oci_core_route_table.spoke_workload[each.value.spoke_key].id
 }
 
 # -----------------------------------------------------------------------------
@@ -519,6 +586,16 @@ output "drg_transit_routing" {
   }
 }
 
+output "spoke_drg_attachment_ids" {
+  description = "DRG attachment OCIDs created for managed spoke VCNs"
+  value       = { for name, attachment in oci_core_drg_attachment.spoke : name => attachment.id }
+}
+
+output "spoke_workload_route_table_ids" {
+  description = "Route table OCIDs associated with managed spoke workload subnets"
+  value       = { for name, route_table in oci_core_route_table.spoke_workload : name => route_table.id }
+}
+
 output "gateway_ids" {
   description = "OCIDs of the gateways used or created"
 
@@ -529,7 +606,5 @@ output "gateway_ids" {
     drg              = local.effective_drg_id
   }
 }
-
-
 
 
