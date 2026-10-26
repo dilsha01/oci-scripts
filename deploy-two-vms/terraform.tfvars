@@ -51,3 +51,10 @@ onprem_cidrs = []
 # Manage full DRG Transit Routing (RT-Spoke, RT-Hub, RT-OnPrem, Import-Hub)
 manage_drg_transit_routing = true
 
+# ---------------- FortiGate HA IAM Roles & Policies ----------------
+create_iam_resources    = true
+dynamic_group_name      = "fgt-ha-dynamic-group"
+policy_name             = "fgt-ha-policy"
+use_granular_iam_policy = true  # true = 7 minimum sufficient permissions, false = virtual-network-family
+
+

@@ -207,6 +207,31 @@ variable "manage_drg_transit_routing" {
   default     = true
 }
 
+# ---------------- IAM & Policy Variables ----------------
+variable "create_iam_resources" {
+  description = "Whether to create the Dynamic Group and IAM Policy for FortiGate HA failover"
+  type        = bool
+  default     = true
+}
+
+variable "dynamic_group_name" {
+  description = "Name of the dynamic group for FortiGate HA VM instances"
+  type        = string
+  default     = "fgt-ha-dynamic-group"
+}
+
+variable "policy_name" {
+  description = "Name of the IAM policy for FortiGate HA failover"
+  type        = string
+  default     = "fgt-ha-policy"
+}
+
+variable "use_granular_iam_policy" {
+  description = "If true, uses the minimum sufficient 7 granular permissions. If false, uses the simpler virtual-network-family policy."
+  type        = bool
+  default     = true
+}
+
 
 provider "oci" {
   region = var.region
